@@ -1,0 +1,132 @@
+/* Design system compartilhado pelo popup e pelo dashboard. */
+:root {
+  --verde: #1f8f6a;
+  --verde-escuro: #14634a;
+  --verde-claro: #e7f3ee;
+  --tinta: #1c2b27;
+  --tinta-suave: #5c6f69;
+  --fundo: #f2f7f5;
+  --cartao: #ffffff;
+  --linha: #e3ebe8;
+  --trilho-off: #c9d6d1;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--tinta);
+  background: var(--fundo);
+}
+
+/* ---------- barra de topo ---------- */
+.topo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--cartao);
+  border-bottom: 1px solid var(--linha);
+}
+.logo {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid var(--verde); flex-shrink: 0;
+  display: grid; place-items: center;
+}
+.logo::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--verde); }
+.marca { font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+.busca { position: relative; flex: 1; min-width: 0; }
+.busca input { padding-left: 30px; }
+.busca::before {
+  content: ""; position: absolute; left: 10px; top: 50%; width: 13px; height: 13px;
+  transform: translateY(-50%); pointer-events: none; opacity: .55;
+  background: no-repeat center/contain url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%235c6f69' stroke-width='1.6'><circle cx='6.6' cy='6.6' r='4.4'/><path d='M10 10l4 4' stroke-linecap='round'/></svg>");
+}
+
+/* ---------- controles ---------- */
+input[type="text"], textarea, select {
+  width: 100%; font: inherit; font-size: 12.5px; color: var(--tinta);
+  background: var(--cartao); border: 1px solid var(--linha);
+  border-radius: 8px; padding: 7px 10px;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--verde); box-shadow: 0 0 0 3px rgba(31,143,106,.15);
+}
+textarea { resize: vertical; line-height: 1.5; }
+.rotulo { display: block; font-size: 11.5px; font-weight: 600; color: var(--tinta-suave); margin-bottom: 4px; }
+.campo { margin-bottom: 12px; }
+.dica { font-size: 11px; line-height: 1.5; color: var(--tinta-suave); }
+
+.btn {
+  font: inherit; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--linha);
+  background: var(--cartao); color: var(--tinta-suave); cursor: pointer;
+}
+.btn:hover { border-color: var(--verde); color: var(--verde-escuro); }
+.btn-primario { background: var(--verde); border-color: var(--verde); color: #fff; }
+.btn-primario:hover { background: var(--verde-escuro); color: #fff; }
+.btn-perigo:hover { border-color: #c0685f; color: #8a2b2b; }
+.btn:focus-visible { outline: 2px solid var(--verde); outline-offset: 2px; }
+.btn:disabled, .btn:disabled:hover {
+  opacity: .4; cursor: not-allowed;
+  background: var(--trilho-off); border-color: var(--trilho-off); color: #fff;
+}
+
+/* ---------- lista de presets ---------- */
+.lista { list-style: none; overflow-y: auto; }
+.item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--linha);
+}
+.item:hover { background: var(--cartao); }
+.item[aria-selected="true"] { background: var(--verde-claro); border-left-color: var(--verde); }
+.item-nome {
+  flex: 1; min-width: 0; font-weight: 600; font-size: 12.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item-texto {
+  display: block; font-weight: 400; font-size: 11px; color: var(--tinta-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip {
+  flex-shrink: 0; font-size: 11px; font-weight: 600;
+  color: var(--verde-escuro); background: var(--verde-claro);
+  border: 1px solid #cfe6dc; border-radius: 20px; padding: 1px 8px;
+}
+.chip-vazio { color: var(--tinta-suave); background: transparent; border-style: dashed; border-color: var(--trilho-off); }
+.vazio { padding: 28px 16px; text-align: center; color: var(--tinta-suave); font-size: 12px; line-height: 1.6; }
+
+/* ---------- switch ---------- */
+.linha-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.trilho {
+  position: absolute; inset: 0; background: var(--trilho-off);
+  border-radius: 22px; cursor: pointer; transition: background .2s ease;
+}
+.trilho::before {
+  content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .2s ease;
+}
+.switch input:checked + .trilho { background: var(--verde); }
+.switch input:checked + .trilho::before { transform: translateX(18px); }
+.switch input:focus-visible + .trilho { outline: 2px solid var(--verde); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- desfazer (toast) ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  display: none; align-items: center; gap: 14px;
+  background: var(--tinta); color: #fff; font-size: 12.5px;
+  border-radius: 10px; padding: 10px 12px 10px 16px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 10;
+}
+.toast.visivel { display: flex; }
+.toast button {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  background: transparent; color: #7fd8b6; border: 1px solid #3c5b52;
+  border-radius: 7px; padding: 5px 11px;
+}
+.toast button:hover { background: #2a3d37; }

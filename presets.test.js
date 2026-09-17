@@ -1,0 +1,283 @@
+// Autoteste de presets.js. Roda fora do Chrome com um storage falso.
+// Não é framework: é o menor arquivo que quebra se a camada de dados quebrar.
+const assert = require("assert");
+const path = require("path");
+
+// ---------- chrome.storage.sync falso ----------
+let dados = {};
+let erroNoSet = null; // quando string, o próximo set() falha com essa mensagem
+
+function clonar(v) { return JSON.parse(JSON.stringify(v)); }
+
+globalThis.chrome = {
+  runtime: { lastError: null },
+  storage: {
+    sync: {
+      get(chaves, cb) {
+        chrome.runtime.lastError = null;
+        if (chaves === null || chaves === undefined) return cb(clonar(dados));
+        const saida = {};
+        for (const [k, padrao] of Object.entries(chaves)) {
+          saida[k] = k in dados ? clonar(dados[k]) : padrao;
+        }
+        cb(saida);
+      },
+      set(obj, cb) {
+        if (erroNoSet) {
+          chrome.runtime.lastError = { message: erroNoSet };
+          erroNoSet = null;
+          return cb();
+        }
+        chrome.runtime.lastError = null;
+        Object.assign(dados, clonar(obj));
+        cb();
+      },
+      remove(chaves, cb) {
+        chrome.runtime.lastError = null;
+        for (const k of [].concat(chaves)) delete dados[k];
+        cb();
+      },
+    },
+  },
+};
+
+require(path.join(__dirname, "presets.js"));
+const P = globalThis.Presets;
+
+function reset(d = {}) { dados = clonar(d); erroNoSet = null; }
+const testes = [];
+const teste = (nome, fn) => testes.push([nome, fn]);
+
+// ---------- validação ----------
+teste("nome vazio é inválido", () => {
+  assert.strictEqual(P.validar({ nome: "", texto: "oi" }).ok, false);
+  assert.strictEqual(P.validar({ nome: "   ", texto: "oi" }).ok, false);
+});
+
+teste("nome sozinho é inválido: preset precisa de pelo menos um campo", () => {
+  const r = P.validar({ nome: "Vazio" });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /texto de expansão|campo do ticket/i);
+});
+
+teste("nome + texto é válido", () => {
+  assert.strictEqual(P.validar({ nome: "Bom dia", texto: "Bom dia!" }).ok, true);
+});
+
+teste("nome + só um campo de ticket é válido (sem texto)", () => {
+  assert.strictEqual(P.validar({ nome: "Só serviço", servico: "Administrativo" }).ok, true);
+  assert.strictEqual(P.validar({ nome: "Só urgência", urgencia: "Dúvidas" }).ok, true);
+});
+
+teste("comando é opcional", () => {
+  assert.strictEqual(P.validar({ nome: "Assinatura", comando: "", texto: "Att" }).ok, true);
+});
+
+// ---------- conflito de comando ----------
+teste("conflito de comando acha outro preset com o mesmo comando", () => {
+  const lista = [
+    { id: "a", nome: "A", comando: "eemi" },
+    { id: "b", nome: "B", comando: "bbom" },
+  ];
+  const c = P.conflitoDeComando({ id: "c", comando: "eemi" }, lista);
+  assert.strictEqual(c && c.nome, "A");
+});
+
+teste("conflito ignora o próprio preset e comando vazio", () => {
+  const lista = [{ id: "a", nome: "A", comando: "eemi" }];
+  assert.strictEqual(P.conflitoDeComando({ id: "a", comando: "eemi" }, lista), null);
+  assert.strictEqual(P.conflitoDeComando({ id: "z", comando: "" }, lista), null);
+});
+
+// ---------- ordenação e busca ----------
+teste("ordena alfabeticamente respeitando acento", () => {
+  const nomes = P.ordenar([
+    { nome: "Emissão" }, { nome: "AnyDesk" }, { nome: "Ácido" }, { nome: "Bom dia" },
+  ]).map((p) => p.nome);
+  assert.deepStrictEqual(nomes, ["Ácido", "AnyDesk", "Bom dia", "Emissão"]);
+});
+
+teste("busca ignora caixa e acento, e olha nome, comando e texto", () => {
+  const lista = [
+    { nome: "Emissão de nota", comando: "eemi", texto: "erro na emissão" },
+    { nome: "Bom dia", comando: "bbom", texto: "Bom dia!" },
+  ];
+  assert.strictEqual(P.filtrar(lista, "EMISSAO").length, 1);
+  assert.strictEqual(P.filtrar(lista, "bbom").length, 1);
+  assert.strictEqual(P.filtrar(lista, "erro").length, 1);
+  assert.strictEqual(P.filtrar(lista, "").length, 2);
+  assert.strictEqual(P.filtrar(lista, "zzz").length, 0);
+});
+
+// ---------- salvar / listar / excluir ----------
+teste("salvar gera id e listar devolve ordenado", async () => {
+  reset();
+  await P.salvar({ nome: "Zebra", texto: "z" });
+  const a = await P.salvar({ nome: "Alfa", texto: "a" });
+  assert.ok(a.id, "salvar deve gerar um id");
+  const lista = await P.listar();
+  assert.deepStrictEqual(lista.map((p) => p.nome), ["Alfa", "Zebra"]);
+});
+
+teste("salvar com id existente mantém o id (renomear não orfana)", async () => {
+  reset();
+  const p = await P.salvar({ nome: "Antigo", texto: "x" });
+  const r = await P.salvar({ ...p, nome: "Novo nome" });
+  assert.strictEqual(r.id, p.id);
+  const lista = await P.listar();
+  assert.strictEqual(lista.length, 1);
+  assert.strictEqual(lista[0].nome, "Novo nome");
+});
+
+teste("salvar preset inválido rejeita", async () => {
+  reset();
+  await assert.rejects(() => P.salvar({ nome: "", texto: "x" }));
+});
+
+teste("salvar propaga erro de quota do storage", async () => {
+  reset();
+  erroNoSet = "QUOTA_BYTES_PER_ITEM quota exceeded";
+  await assert.rejects(() => P.salvar({ nome: "Grande", texto: "x" }), /quota/i);
+});
+
+teste("excluir remove só o preset pedido", async () => {
+  reset();
+  const a = await P.salvar({ nome: "A", texto: "a" });
+  await P.salvar({ nome: "B", texto: "b" });
+  await P.excluir(a.id);
+  const lista = await P.listar();
+  assert.deepStrictEqual(lista.map((p) => p.nome), ["B"]);
+});
+
+// ---------- migração ----------
+const ANTIGO = {
+  enabled: true,
+  rascunhoFechamento: { assunto: "sujeira", resumo: "sujeira" },
+  presets: {
+    "Emissão de nota": {
+      assunto: "Emissão de nota fiscal", resumo: "erro na emissão de nota fiscal.",
+      servico: "Administrativo", categoria: "Dúvidas", urgencia: "Dúvidas", comando: "eemi",
+    },
+    "Bom dia": { assunto: "", resumo: "Bom dia!", servico: "", categoria: "", urgencia: "", comando: "bbom" },
+  },
+};
+
+teste("migrar converte resumo->texto, marca versão e limpa o formato antigo", async () => {
+  reset(ANTIGO);
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual("presets" in dados, false, "chave presets deve sair");
+  assert.strictEqual("rascunhoFechamento" in dados, false, "rascunho deve sair");
+  assert.strictEqual(dados.enabled, true, "não pode mexer em outras chaves");
+
+  const lista = await P.listar();
+  assert.deepStrictEqual(lista.map((p) => p.nome), ["Bom dia", "Emissão de nota"]);
+  const emissao = lista.find((p) => p.nome === "Emissão de nota");
+  assert.strictEqual(emissao.texto, "erro na emissão de nota fiscal.");
+  assert.strictEqual(emissao.comando, "eemi");
+  assert.strictEqual(emissao.servico, "Administrativo");
+  assert.ok(emissao.id, "cada preset migrado precisa de id");
+});
+
+teste("migrar duas vezes não duplica", async () => {
+  reset(ANTIGO);
+  await P.migrar();
+  await P.migrar();
+  assert.strictEqual((await P.listar()).length, 2);
+});
+
+teste("migrar é idempotente mesmo se a primeira tentativa falhar no meio", async () => {
+  reset(ANTIGO);
+  erroNoSet = "falha simulada";
+  await assert.rejects(() => P.migrar());
+  assert.strictEqual("presets" in dados, true, "não pode remover presets se falhou");
+  await P.migrar(); // segunda tentativa, agora sem erro
+  assert.strictEqual((await P.listar()).length, 2, "não pode duplicar o que já tinha entrado");
+  assert.strictEqual(dados.presetsVersao, 2);
+});
+
+teste("re-migrar com os presets antigos ainda presentes não duplica (id determinístico)", async () => {
+  reset(ANTIGO);
+  await P.migrar();
+  // Simula uma migração que gravou os presets mas morreu antes de marcar a
+  // versão e limpar a chave antiga. O id derivado do nome é o que faz a
+  // segunda passada SOBRESCREVER em vez de duplicar.
+  dados.presetsVersao = 0;
+  dados.presets = clonar(ANTIGO.presets);
+  await P.migrar();
+  assert.strictEqual((await P.listar()).length, 2, "re-migrar não pode duplicar");
+});
+
+teste("re-migrar nao sobrescreve preset que o usuario ja editou", async () => {
+  reset(ANTIGO);
+  await P.migrar();
+
+  // Usuario edita o texto de um preset ja migrado.
+  const lista = await P.listar();
+  const alvo = lista.find((p) => p.nome === "Bom dia");
+  await P.salvar({ ...alvo, texto: "TEXTO EDITADO PELO USUARIO" });
+
+  // O sync reentrega a chave antiga (ou o remove anterior falhou).
+  dados.presets = clonar(ANTIGO.presets);
+  await P.migrar();
+
+  const depois = await P.listar();
+  assert.strictEqual(depois.length, 2, "nao pode duplicar");
+  assert.strictEqual(
+    depois.find((p) => p.nome === "Bom dia").texto,
+    "TEXTO EDITADO PELO USUARIO",
+    "a edicao do usuario nao pode ser sobrescrita pela re-migracao"
+  );
+});
+
+teste("migrar em instalação limpa não cria nada", async () => {
+  reset({ enabled: true });
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual((await P.listar()).length, 0);
+});
+
+teste("sync atrasado: presets que chegam DEPOIS da versao marcada ainda migram", async () => {
+  // Maquina nova: migrar roda com o store vazio e marca a versao.
+  reset({ enabled: true });
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual((await P.listar()).length, 0);
+
+  // O chrome.storage.sync entrega a chave antiga so agora.
+  dados.presets = clonar(ANTIGO.presets);
+  await P.migrar();
+
+  const lista = await P.listar();
+  assert.deepStrictEqual(lista.map((p) => p.nome), ["Bom dia", "Emissão de nota"]);
+  assert.strictEqual("presets" in dados, false, "a chave antiga deve ser limpa na segunda passada");
+});
+
+teste("migrar nao colide ids de nomes que diferem so por espaco no fim", async () => {
+  reset({
+    presets: {
+      "Nota": { resumo: "primeiro", comando: "n1" },
+      "Nota ": { resumo: "segundo", comando: "n2" },
+    },
+  });
+  await P.migrar();
+  const lista = await P.listar();
+  assert.strictEqual(lista.length, 2, "os dois presets tem que sobreviver");
+  assert.deepStrictEqual(lista.map((p) => p.texto).sort(), ["primeiro", "segundo"]);
+});
+
+// ---------- execução ----------
+(async () => {
+  let falhas = 0;
+  for (const [nome, fn] of testes) {
+    try {
+      await fn();
+      console.log("  ok   " + nome);
+    } catch (e) {
+      falhas++;
+      console.log("  FALHA " + nome + "\n         " + e.message);
+    }
+  }
+  console.log(`\n${testes.length - falhas}/${testes.length} passaram`);
+  process.exit(falhas ? 1 : 0);
+})();

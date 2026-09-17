@@ -1,0 +1,57 @@
+AUTO MOVIDESK – FECHAMENTO DE TICKETS
+=====================================
+
+O que faz
+---------
+Três coisas, todas dentro de csjgroup.movidesk.com:
+
+1. Enquete de IA e status. Ao abrir um ticket em /Ticket/Edit, marca
+   automaticamente "Não" nas perguntas "Apoio com IA?" e "IA foi Efetiva?" —
+   apenas se a pergunta ainda estiver sem resposta — e resolve o status do
+   ticket. Você pode trocar para "Sim" normalmente; a extensão nunca
+   sobrescreve uma resposta já marcada (nem sua, nem de um ticket já salvo).
+
+2. Expansão de texto. Digite o comando de um preset (ex.: "eemi") em qualquer
+   campo do Movidesk — ação pública, chat, e-mail — e o texto do preset é
+   colado ali, onde o cursor estiver.
+
+3. Presets. Cada preset guarda um nome, um comando opcional, o texto de
+   expansão e, se você quiser, os campos do ticket (assunto, serviço,
+   categoria e urgência).
+
+Onde gerenciar os presets
+-------------------------
+- Dashboard (aba própria): clique no ícone da extensão e depois em
+  "Dashboard ›". É onde se cria, edita, duplica e exclui preset. Excluir abre
+  uma janela de alguns segundos com "Desfazer", caso tenha sido sem querer.
+- Popup (o painel do ícone): serve para consultar e usar. Busque pelo nome,
+  comando ou texto, veja o texto completo no painel da direita e clique em
+  "Preencher ticket" para jogar os campos do preset no ticket aberto. O popup
+  é somente leitura de propósito — para editar, ele leva você ao dashboard.
+
+Como instalar
+-------------
+1. Extraia este ZIP em uma pasta fixa (ex.: Documentos\movidesk-auto-nao).
+   Não apague a pasta depois — o Chrome carrega a extensão direto dela.
+2. No Chrome, acesse chrome://extensions
+3. Ative o "Modo do desenvolvedor" (canto superior direito).
+4. Clique em "Carregar sem compactação" e selecione a pasta extraída.
+5. Abra um ticket no Movidesk e confira: os dois "Não" ganham um brilho
+   verde rápido ao serem marcados.
+
+Ligar / Desligar
+----------------
+Clique no ícone da extensão (fixe pelo ícone de quebra-cabeça, se quiser)
+e use o interruptor. O efeito é imediato, sem recarregar a página.
+Desligar não desmarca o que já foi marcado — só para de marcar dali em diante.
+O mesmo interruptor está nas configurações do dashboard.
+
+Ajustes (se precisar)
+---------------------
+- Exigir delimitador: no botão Configurações do dashboard.
+  Com a opção ligada, o comando só dispara após espaço ou pontuação, o que
+  evita expansão acidental no meio de uma palavra.
+- Incluir/alterar perguntas da enquete: edite a lista PERGUNTAS no topo do
+  content.js (texto em minúsculas e sem acentos). Depois clique em
+  "Atualizar" na página chrome://extensions.
+- Usar em outra URL/subdomínio: edite "matches" no manifest.json.

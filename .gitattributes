@@ -1,0 +1,4 @@
+# Mantem LF em todo lugar: sem isso um clone em Linux/Mac mostra todo
+# arquivo como alterado so por causa do fim de linha.
+* text=auto eol=lf
+*.png binary

@@ -1,0 +1,6 @@
+# Permissoes locais do Claude Code, por maquina
+.claude/
+
+# Lixo do Windows / OneDrive
+desktop.ini
+Thumbs.db

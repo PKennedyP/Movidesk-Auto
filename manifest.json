@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Movidesk – Fechamento de tickets",
+  "version": "2.6.17",
+  "description": "Marca 'Não' e 'Resolvido' automaticamente, expande texto por comando e preenche assunto, serviço, categoria e urgência nos tickets do Movidesk.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://csjgroup.movidesk.com/*"
+      ],
+      "js": [
+        "expansor.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Auto Movidesk",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
