@@ -236,7 +236,7 @@ const ANTIGO = {
 teste("migrar converte resumo->texto, marca versão e limpa o formato antigo", async () => {
   reset(ANTIGO);
   await P.migrar();
-  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual(dados.presetsVersao, 3);
   assert.strictEqual("presets" in dados, false, "chave presets deve sair");
   assert.strictEqual("rascunhoFechamento" in dados, false, "rascunho deve sair");
   assert.strictEqual(dados.enabled, true, "não pode mexer em outras chaves");
@@ -264,7 +264,7 @@ teste("migrar é idempotente mesmo se a primeira tentativa falhar no meio", asyn
   assert.strictEqual("presets" in dados, true, "não pode remover presets se falhou");
   await P.migrar(); // segunda tentativa, agora sem erro
   assert.strictEqual((await P.listar()).length, 2, "não pode duplicar o que já tinha entrado");
-  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual(dados.presetsVersao, 3);
 });
 
 teste("re-migrar com os presets antigos ainda presentes não duplica (id determinístico)", async () => {
@@ -304,7 +304,7 @@ teste("re-migrar nao sobrescreve preset que o usuario ja editou", async () => {
 teste("migrar em instalação limpa não cria nada", async () => {
   reset({ enabled: true });
   await P.migrar();
-  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual(dados.presetsVersao, 3);
   assert.strictEqual((await P.listar()).length, 0);
 });
 
@@ -312,7 +312,7 @@ teste("sync atrasado: presets que chegam DEPOIS da versao marcada ainda migram",
   // Maquina nova: migrar roda com o store vazio e marca a versao.
   reset({ enabled: true });
   await P.migrar();
-  assert.strictEqual(dados.presetsVersao, 2);
+  assert.strictEqual(dados.presetsVersao, 3);
   assert.strictEqual((await P.listar()).length, 0);
 
   // O chrome.storage.sync entrega a chave antiga so agora.
