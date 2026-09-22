@@ -10,25 +10,32 @@
   // <select> do popup.html). Os nomes são EXATOS porque o content.js casa a
   // opção por TEXTO normalizado, não por id.
   const OPCOES = {
-  servico: [
-    "Administrativo",
-    "Conciliador",
-    "Contábil / Fiscal",
-    "Document Center",
-    "DRE TIM",
-    "Financeiro",
-    "Implantação / Treinamento",
-    "Integrações",
-    "Loja",
-    "Metas e Comissões",
-    "Módulo TIM",
-    "Mural",
-    "Power BI",
-    "Sistema de Caixa",
-    "Smart PDV",
-    "TIM > Contestação de Comissão",
-    "TIM > Previsão de Comissão",
-  ],
+    // Árvore de serviço do Movidesk, capturada em 2026-09-22. Os nomes são
+    // EXATOS de propósito: o content.js casa a opção pelo texto normalizado,
+    // não por id. Se o Movidesk mudar a árvore, é este objeto que se edita.
+    // Omni e SKY - Conferência Detalhada ficaram de fora porque não foram
+    // expandidos na captura -- ausência deliberada, não descuido.
+    sistemas: {
+      "Assist": ["Administrativo", "Assistência Técnica", "B2B", "CLI", "Estoque", "GED", "Integrações", "Jurídico", "RMA", "SAC", "WKF"],
+      "Autua": ["Fiscal", "Secretaria", "Transportador"],
+      "Beakt": ["Clínica", "Integrações", "Matriz"],
+      "Cadastro de Declaração de Grande Gerador": ["Administrativo", "Gerador", "Transportador"],
+      "CEU Coleta Especial Urbana": ["APP Coletor", "Concessionária", "Gestor", "Monitoramento"],
+      "Coletas CPL": ["APP Concessionária", "APP Fiscal", "Concessionária", "Fiscalização", "Gestor"],
+      "Coletas Grandes Geradores": ["APP Fiscalização", "APP Transportadores", "Fiscalização", "Gerador", "Integrações", "Secretaria", "Transportador"],
+      "Coletas RCC": ["APP Fiscalização", "APP Munícipe", "APP Transportador", "Destino Final", "Fiscalização", "Grande Gerador", "Integrações", "Secretaria", "Transportador"],
+      "DataSys": ["Administrativo", "Conciliador", "Contábil / Fiscal", "Document Center", "DRE TIM", "Financeiro", "Implantação / Treinamento", "Integrações", "Loja", "Metas e Comissões", "Módulo TIM", "Mural", "Power BI", "Sistema de Caixa", "Smart PDV", "TIM > Contestação de Comissão", "TIM > Previsão de Comissão"],
+      "FLIC - Fiscalização Coleta Publica": ["App Fiscal", "Boletim Fiscalização", "Cadastros e Configurações", "Documentos e Indicadores", "Fluxo Anomalias"],
+      "FLIP Fiscalização Limpeza Publica": ["ACIC", "APP Contratada", "APP Fiscalização", "BFS", "Cadastros e Configurações", "CNC", "Concessionária", "Defesa e Recurso", "Indicadores", "Integrações", "Ouvidoria", "SAC 156"],
+      "Gaia": ["Fiscal", "Requerente", "Secretaria"],
+      "GESP": ["Administrativo", "APP Recipientes", "Contratada"],
+      "PORTAL TIM": ["Cadastro de Usuário", "Importação de grade", "Mapeamento"],
+      "Reversa": ["Admin", "Credenciada", "Distribuidor", "Operador Logistico"],
+      "Scripts CSJ": ["Clientes", "Colaboradores", "Recursos", "Scripts"],
+      "Sistema de Cadastros": ["Aprovação", "Certificados", "Consultas", "Integrações", "Requisição Cadastro"],
+      "Sistema TRS": ["Home"],
+      "Unipark": ["Conveniado", "Credenciado", "Usuario"],
+    },
   categoria: [
     "Análise de Negócio",
     "Apresentando Lentidão",
@@ -72,6 +79,26 @@
     "Sist. Fora do ar",
   ],
   };
+
+  // U+203A, não ">". "TIM > Contestação de Comissão" e "TIM > Previsão de
+  // Comissão" são nomes reais de serviço com ">" no meio: um separador
+  // ingênuo se confundiria com eles. Verificado que nenhum dos 124 nomes
+  // (19 sistemas + 105 serviços) contém U+203A.
+  const SEP = " › ";
+
+  // PARES alimenta o <datalist>; MAPA_SERVICO resolve o que o usuário digitou.
+  // A resolução é por CONSULTA, nunca por split: se um nome novo um dia
+  // contiver o separador, a consulta falha e o campo acusa, em vez de
+  // devolver um par errado em silêncio.
+  const PARES = [];
+  const MAPA_SERVICO = {};
+  for (const sistema of Object.keys(OPCOES.sistemas)) {
+    for (const servico of OPCOES.sistemas[sistema]) {
+      const rotulo = sistema + SEP + servico;
+      PARES.push(rotulo);
+      MAPA_SERVICO[rotulo] = { sistema: sistema, servico: servico };
+    }
+  }
 
   const $ = (id) => document.getElementById(id);
   const elLista = $("lista");
@@ -162,6 +189,21 @@
       </select>${fora ? `<div class="dica">"${esc(val)}" não está na lista atual do Movidesk.</div>` : ""}</div>`;
     };
 
+    // Sistema e serviço num controle só. O <datalist> é nativo: o Chrome
+    // filtra por substring enquanto se digita, então a lista que a pessoa
+    // encara é curta apesar dos 105 itens.
+    const campoServico = (p) => {
+      const valor = p.sistema && p.servico ? p.sistema + SEP + p.servico : p.servico;
+      const opcoes = PARES.map((v) => `<option value="${esc(v)}"></option>`).join("");
+      return `<div class="campo">
+      <label class="rotulo" for="servico">Serviço</label>
+      <input type="text" id="servico" list="lista-servicos" value="${esc(valor)}"
+             placeholder="- não alterar -" autocomplete="off" />
+      <datalist id="lista-servicos">${opcoes}</datalist>
+      <div class="dica">${PARES.length} serviços em ${Object.keys(OPCOES.sistemas).length} sistemas. Clique na setinha para ver todos, ou digite para filtrar.</div>
+      <div class="dica" id="aviso-servico"></div></div>`;
+    };
+
     elEditor.innerHTML = `<div class="editor-limite">
       <div class="dois">
         ${txt("nome", "Nome do preset", p.nome, "ex.: Emissão de nota")}
@@ -177,7 +219,7 @@
         <summary>Campos do ticket ${preenchidos ? `(${preenchidos} preenchido${preenchidos > 1 ? "s" : ""})` : "(nenhum)"}</summary>
         <div class="bloco-corpo">
           ${txt("assunto", "Assunto", p.assunto, "deixe vazio para não alterar")}
-          ${sel("servico", "Serviço", p.servico, OPCOES.servico, "- não alterar -")}
+          ${campoServico(p)}
           <div class="dois">
             ${sel("categoria", "Categoria", p.categoria, OPCOES.categoria, "- o que o Movidesk sugerir -")}
             ${sel("urgencia", "Urgência", p.urgencia, OPCOES.urgencia, "- o que o Movidesk sugerir -")}
@@ -194,14 +236,40 @@
       </div>
       <div class="dica" id="aviso-editor" style="margin-top:10px;color:#8a2b2b"></div>
     </div>`;
+    atualizarAvisoServico();
+  }
+
+  // Campo de texto livre aceita qualquer coisa, então o usuário precisa saber
+  // na hora se o que ele digitou resolve. O bloqueio ao salvar é a segunda
+  // defesa, não a primeira.
+  function atualizarAvisoServico() {
+    const campo = $("servico");
+    const aviso = $("aviso-servico");
+    if (!campo || !aviso) return;
+    const texto = campo.value.trim();
+    if (!texto) { aviso.textContent = ""; aviso.style.color = ""; return; }
+    const par = MAPA_SERVICO[texto];
+    if (par) {
+      aviso.textContent = `Sistema: ${par.sistema}  |  Serviço: ${par.servico}`;
+      aviso.style.color = "var(--verde-escuro)";
+    } else {
+      aviso.textContent = "ainda não corresponde a nenhum serviço da lista";
+      aviso.style.color = "#8a2b2b";
+    }
   }
 
   function lerEditor() {
     const v = (id) => $(id).value;
+    // Texto que não resolve vira servico sem sistema, que o Presets.validar
+    // bloqueia com "Escolha o sistema do serviço." -- de propósito: é mais
+    // honesto do que descartar em silêncio o que a pessoa digitou.
+    const digitado = v("servico").trim();
+    const par = MAPA_SERVICO[digitado] || { sistema: "", servico: digitado };
     return {
       id: selecionadoId === "" ? "" : selecionadoId,
       nome: v("nome"), comando: v("comando"), texto: v("texto"),
-      assunto: v("assunto"), servico: v("servico"),
+      assunto: v("assunto"),
+      sistema: par.sistema, servico: par.servico,
       categoria: v("categoria"), urgencia: v("urgencia"),
     };
   }
@@ -340,6 +408,10 @@
     if (acao === "salvar") salvar();
     else if (acao === "duplicar") duplicar();
     else if (acao === "excluir") excluir();
+  });
+
+  elEditor.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "servico") atualizarAvisoServico();
   });
 
   elBusca.addEventListener("input", desenharLista);
