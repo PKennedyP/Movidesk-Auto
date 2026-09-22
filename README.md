@@ -82,9 +82,11 @@ Duas coisas no `content.js` parecem arbitrárias e não são:
   classe. Medido em 2026-09-22; com a classe no filtro, os presets desses
   sistemas falhavam com "não encontrado na árvore".
 
-A busca do serviço é escopada ao nó-pai `DataSys` de propósito: existem filhos
-de mesmo nome sob pais diferentes (há um "Administrativo" em DataSys e outro em
-Assist), então uma busca global clica no errado.
+A busca do serviço é escopada ao nó-pai de propósito, e o pai vem do campo
+`sistema` do preset. Onze nomes de serviço existem em mais de um sistema —
+"Integrações" aparece em seis deles, "Administrativo" em três — então uma busca
+global pelo nome do serviço clicaria no errado. É por isso que o preset guarda
+o par sistema + serviço, e não só o serviço.
 
 ## Ajustes comuns
 
@@ -105,6 +107,6 @@ Assist), então uma busca global clica no errado.
 node presets.test.js
 ```
 
-22 casos, sem dependência nenhuma — monta um `chrome.storage.sync` falso em
+32 casos, sem dependência nenhuma — monta um `chrome.storage.sync` falso em
 memória. As telas não têm teste automatizado; mudança de UI se verifica no
 Chrome.
