@@ -14,10 +14,15 @@
 
   const CAMPOS_TICKET = [
     ["assunto", "Assunto"],
+    ["sistema", "Sistema"],
     ["servico", "Serviço"],
     ["categoria", "Categoria"],
     ["urgencia", "Urgência"],
   ];
+
+  // O sistema aparece no preview mas NÃO habilita o botão: sozinho ele não
+  // preenche nada no ticket, e a validação nem deixaria salvar um preset assim.
+  const CAMPOS_QUE_PREENCHEM = ["assunto", "servico", "categoria", "urgencia"];
 
   let presets = [];
   let selecionadoId = null;
@@ -92,6 +97,7 @@
       return;
     }
     const comCampos = CAMPOS_TICKET.filter(([k]) => p[k]);
+    const preenche = CAMPOS_QUE_PREENCHEM.some((k) => p[k]);
     elPainel.innerHTML = `
       <div class="painel-cabeca">
         <span class="painel-nome">${esc(p.nome)}</span>
@@ -102,7 +108,7 @@
         ? `<dl class="campos-resumo">${comCampos.map(([k, r]) => `<dt>${r}</dt><dd>${esc(p[k])}</dd>`).join("")}</dl>`
         : `<div class="sem-campos">Só texto — este preset não preenche campos do ticket.</div>`}
       <div class="painel-acoes">
-        <button class="btn btn-primario" data-acao="preencher"${comCampos.length ? "" : ' disabled title="Este preset não preenche campos do ticket."'}>Preencher ticket</button>
+        <button class="btn btn-primario" data-acao="preencher"${preenche ? "" : ' disabled title="Este preset não preenche campos do ticket."'}>Preencher ticket</button>
         <button class="btn" data-acao="editar">Editar no dashboard</button>
       </div>`;
   }
@@ -112,7 +118,10 @@
   function preencher() {
     const p = presets.find((o) => o.id === selecionadoId);
     if (!p) return;
-    const dados = { assunto: p.assunto, servico: p.servico, categoria: p.categoria, urgencia: p.urgencia };
+    const dados = {
+      assunto: p.assunto, sistema: p.sistema, servico: p.servico,
+      categoria: p.categoria, urgencia: p.urgencia,
+    };
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = (tabs || [])[0];
