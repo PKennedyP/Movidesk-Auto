@@ -324,6 +324,21 @@ teste("sync atrasado: presets que chegam DEPOIS da versao marcada ainda migram",
   assert.strictEqual("presets" in dados, false, "a chave antiga deve ser limpa na segunda passada");
 });
 
+teste("preset v2 que chega pelo sync DEPOIS da versao 3 ainda ganha sistema", async () => {
+  // Máquina nova: migra com o storage vazio e marca a versão 3.
+  reset({ enabled: true });
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 3);
+
+  // O sync entrega agora um preset de outra máquina, no formato v2:
+  // tem servico e não tem sistema.
+  dados["preset:z"] = { id: "z", nome: "Z", servico: "Administrativo", texto: "x" };
+  await P.migrar();
+
+  const lista = await P.listar();
+  assert.strictEqual(lista[0].sistema, "DataSys", "a guarda de versão não pode impedir a cura");
+});
+
 teste("migrar nao colide ids de nomes que diferem so por espaco no fim", async () => {
   reset({
     presets: {

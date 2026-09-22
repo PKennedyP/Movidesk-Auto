@@ -120,6 +120,14 @@
     const tudo = await ler(null);
     const presets = tudo.presets || null;
     const presetsVersao = tudo.presetsVersao || 0;
+    // Um preset:* pode chegar pelo sync JÁ no formato v2, vindo de uma máquina
+    // num build anterior, depois desta aqui ter marcado a versão 3. Sair só
+    // por versão deixaria esse preset sem sistema para sempre.
+    const precisaV3 = Object.keys(tudo).some((k) => {
+      if (!k.startsWith(PREFIXO)) return false;
+      const p = tudo[k];
+      return p && p.servico && !p.sistema;
+    });
     // A guarda de versão sozinha não basta: o chrome.storage.sync entrega os
     // dados de forma assíncrona depois do login, então numa máquina nova a
     // migração pode rodar com o store vazio, marcar a versão, e só DEPOIS o
@@ -129,7 +137,7 @@
     // é seguro porque o id é derivado do nome (mesma chave nas duas passadas,
     // então nada duplica) e porque o `continue` abaixo pula o que já migrou
     // (então nada sobrescreve uma edição posterior do usuário).
-    if (presetsVersao >= VERSAO && !presets) return;
+    if (presetsVersao >= VERSAO && !presets && !precisaV3) return;
 
     for (const [nome, d] of Object.entries(presets || {})) {
       const convertido = completar({
