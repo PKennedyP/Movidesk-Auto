@@ -14,12 +14,6 @@
   // Texto da opção que deve ser pré-selecionada nos radios (min., sem acento).
   const OPCAO_ALVO = "nao";
 
-  // --- Serviço (árvore jqxTree) ---
-  // Os serviços do dropdown na telinha são todos filhos deste nó-pai. Buscar
-  // ESCOPADO a ele evita colisão de nome com filhos de mesmo nome em outros
-  // pais (ex.: "Administrativo" existe tanto em DataSys quanto em Assist).
-  const PAI_SERVICO = "DataSys";
-
   // --- Status do ticket ---
   const STATUS_ALVO = "resolvido";
   const STATUS_ATUAL_PERMITIDO = ["novo"];
@@ -418,6 +412,7 @@
       const idx = atual.indexOf(" - ");
       const empresa = idx >= 0 ? atual.slice(idx + 3).trim() : atual.trim();
       const novo = empresa ? `${assuntoDigitado.trim()} - ${empresa}` : assuntoDigitado.trim();
+      if (novo === atual) return { ok: true, campo: "assunto", jaEstava: true };
       input.value = novo;
       dispararEventos(input, ["input", "change"]);
       return { ok: true, campo: "assunto", valor: novo };
@@ -433,12 +428,17 @@
       const choice = container.querySelector(".select2-choice");
       if (!choice) { cb({ ok: false, motivo: "choice não encontrado" }); return; }
 
-      choice.click(); // abre a lista (igual ao status)
-
       const chosenAtual = () => {
         const chosen = container.querySelector(".select2-chosen");
         return chosen ? norm(chosen.textContent) : null;
       };
+
+      // Já está no valor desejado: nem abre a lista. Dropdown que não abre é
+      // dropdown que não falha. A comparação é "já é igual ao alvo", não "já
+      // está preenchido" -- valor diferente continua sendo trocado.
+      if (chosenAtual() === norm(textoAlvo)) { cb({ ok: true, jaEstava: true }); return; }
+
+      choice.click(); // abre a lista (igual ao status)
 
       aguardarEClicarOpcao(
         norm(textoAlvo),
@@ -468,7 +468,15 @@
       for (const li of lis) {
         if (li.offsetParent === null) continue; // pula abas ocultas
         const item = li.querySelector(":scope > .jqx-tree-item");
-        if (!item || !item.querySelector(".notSelectable")) continue; // só nós-pai
+        if (!item) continue;
+        // Um nó-pai é identificado pela SETA de expandir, não pela classe
+        // .notSelectable. Medição nos 21 sistemas em 2026-09-22: seis dos 19
+        // em escopo (Autua, Cadastro de Declaração de Grande Gerador, Gaia,
+        // Scripts CSJ, Sistema TRS, Unipark) NÃO têm essa classe, e com ela
+        // no filtro nenhum deles era encontrado -- 32% dos sistemas falhando
+        // em silêncio. É seguro porque nenhum nome de sistema existe também
+        // como nome de serviço (21 pais x 79 filhos distintos, interseção vazia).
+        if (!li.querySelector(":scope > .jqx-tree-item-arrow-collapse")) continue;
         if (norm(nomeDoNoServico(item)) === norm(nomePai)) return li;
       }
       return null;
@@ -489,8 +497,15 @@
       return null;
     };
 
-    var preencherServico = function (txt, cb) {
+    var preencherServico = function (sistema, txt, cb) {
       if (!txt) { cb({ ok: true, campo: "servico", pulado: true }); return; }
+      // Sem o pai não há onde procurar: 11 nomes de serviço existem em mais de
+      // um sistema. Acontece com preset legado numa máquina onde a migração
+      // ainda não rodou.
+      if (!sistema) {
+        cb({ ok: false, campo: "servico", motivo: `serviço "${txt}" está sem sistema — reabra o preset e escolha o sistema` });
+        return;
+      }
 
       const campo = acharVisivel(".md-select-treeview-dropdown-field");
       if (!campo) { cb({ ok: false, campo: "servico", motivo: "campo visível não encontrado" }); return; }
@@ -520,10 +535,10 @@
           if (nomeAgora && norm(nomeAgora.textContent) === norm(txt)) {
             resultado = { ok: true, campo: "servico" };
           } else {
-            const liPai = acharLiPai(PAI_SERVICO);
+            const liPai = acharLiPai(sistema);
             if (!liPai) {
               if (tentativas >= TIMING_MAX_TENTATIVAS_SERVICO) {
-                resultado = { ok: false, campo: "servico", motivo: `"${PAI_SERVICO}" não encontrado na árvore` };
+                resultado = { ok: false, campo: "servico", motivo: `sistema "${sistema}" não encontrado na árvore` };
               }
             } else {
               const seta = liPai.querySelector(":scope > .jqx-tree-item-arrow-collapse");
@@ -536,12 +551,14 @@
                 item.click(); // confirmação acontece na próxima rodada (checagem do .name acima)
               }
               if (tentativas >= TIMING_MAX_TENTATIVAS_SERVICO) {
+                // Três motivos distintos de propósito: saber em qual etapa
+                // parou transforma um relato do usuário em diagnóstico direto.
                 resultado = {
                   ok: false,
                   campo: "servico",
                   motivo: item
                     ? `clique em "${txt}" não confirmado (seleção não refletiu no campo)`
-                    : `serviço "${txt}" não encontrado em ${PAI_SERVICO}`,
+                    : `sistema "${sistema}" encontrado, mas o serviço "${txt}" não apareceu entre os filhos dele`,
                 };
               }
             }
@@ -589,7 +606,7 @@
       aplicando = true;
       const relatorio = [];
 
-      preencherServico(dados.servico, (rServico) => {
+      preencherServico(dados.sistema, dados.servico, (rServico) => {
         relatorio.push(rServico);
 
         setTimeout(() => {
@@ -639,6 +656,9 @@
           comando: p.comando,
           texto: p.resumo,
           assunto: p.assunto,
+          // Preset em formato antigo é necessariamente DataSys: PAI_SERVICO era
+          // constante. Mesmo motivo da migração v3 no presets.js.
+          sistema: "DataSys",
           servico: p.servico,
           categoria: p.categoria,
           urgencia: p.urgencia,
