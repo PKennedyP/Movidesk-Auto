@@ -476,7 +476,12 @@
         // no filtro nenhum deles era encontrado -- 32% dos sistemas falhando
         // em silêncio. É seguro porque nenhum nome de sistema existe também
         // como nome de serviço (21 pais x 79 filhos distintos, interseção vazia).
-        if (!li.querySelector(":scope > .jqx-tree-item-arrow-collapse")) continue;
+        //
+        // Aceita as DUAS classes de seta: o jqxTree TROCA `-collapse` por
+        // `-expand` quando o nó abre, não acrescenta. Filtrar só por
+        // `-collapse` faria acharLiPai perder o sistema logo depois de
+        // expandi-lo, e a busca do filho nunca aconteceria.
+        if (!li.querySelector(":scope > .jqx-tree-item-arrow-collapse, :scope > .jqx-tree-item-arrow-expand")) continue;
         if (norm(nomeDoNoServico(item)) === norm(nomePai)) return li;
       }
       return null;
