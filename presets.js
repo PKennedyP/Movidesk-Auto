@@ -56,7 +56,7 @@
     // Serviço sem sistema é ambíguo: 11 nomes de serviço existem em mais de um
     // sistema ("Integrações" em 6 deles), então o par é que identifica.
     if (c.servico && !c.sistema) {
-      return { ok: false, motivo: "Escolha o sistema do serviço." };
+      return { ok: false, motivo: "Escolha um serviço da lista — o sistema vem junto com ele." };
     }
     if (!c.texto.trim() && !CAMPOS_TICKET.some((k) => c[k])) {
       return {
@@ -125,7 +125,7 @@
     // por versão deixaria esse preset sem sistema para sempre.
     const precisaV3 = Object.keys(tudo).some((k) => {
       if (!k.startsWith(PREFIXO)) return false;
-      const p = tudo[k];
+      const p = completar(tudo[k]);
       return p && p.servico && !p.sistema;
     });
     // A guarda de versão sozinha não basta: o chrome.storage.sync entrega os

@@ -508,7 +508,7 @@
       // um sistema. Acontece com preset legado numa máquina onde a migração
       // ainda não rodou.
       if (!sistema) {
-        cb({ ok: false, campo: "servico", motivo: `serviço "${txt}" está sem sistema — reabra o preset e escolha o sistema` });
+        cb({ ok: false, campo: "servico", motivo: `serviço "${txt}" está sem sistema — abra o popup uma vez para a migração completar o preset` });
         return;
       }
 
@@ -651,7 +651,13 @@
     var lerPresets = function (tudo) {
       const novos = Object.keys(tudo)
         .filter((k) => k.startsWith("preset:"))
-        .map((k) => tudo[k]);
+        // Preset gravado antes da v3 não tem a chave `sistema`, e o comando de
+        // expansão roda sem passar pelo popup -- ou seja, sem a migração ter
+        // rodado. Sem este default o serviço deixaria de ser preenchido em
+        // silêncio, porque o caminho do comando descarta o relatório.
+        // Object.assign com o default PRIMEIRO: uma chave própria do preset
+        // (mesmo vazia) vence, então preset v3 não é alterado.
+        .map((k) => Object.assign({ sistema: "DataSys" }, tudo[k]));
       if (novos.length) return novos;
       return Object.entries(tudo.presets || {})
         .filter(([, p]) => p) // a guarda existia antes desta entrega e sumiu:

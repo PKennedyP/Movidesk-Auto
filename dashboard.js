@@ -91,7 +91,11 @@
   // contiver o separador, a consulta falha e o campo acusa, em vez de
   // devolver um par errado em silêncio.
   const PARES = [];
-  const MAPA_SERVICO = {};
+  // Object.create(null) e não {}: com um literal, digitar "toString" ou
+  // "constructor" no campo resolveria para a função herdada do protótipo, o
+  // aviso ficaria verde com "undefined", e o lerEditor descartaria em silêncio
+  // o que a pessoa digitou.
+  const MAPA_SERVICO = Object.create(null);
   for (const sistema of Object.keys(OPCOES.sistemas)) {
     for (const servico of OPCOES.sistemas[sistema]) {
       const rotulo = sistema + SEP + servico;
@@ -151,7 +155,7 @@
 
   // ---------- editor ----------
 
-  const VAZIO = { id: "", nome: "", comando: "", texto: "", assunto: "", servico: "", categoria: "", urgencia: "" };
+  const VAZIO = { id: "", nome: "", comando: "", texto: "", assunto: "", sistema: "", servico: "", categoria: "", urgencia: "" };
 
   function presetSelecionado() {
     if (selecionadoId === null) return null;
