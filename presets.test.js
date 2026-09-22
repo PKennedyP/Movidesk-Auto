@@ -65,8 +65,79 @@ teste("nome + texto é válido", () => {
 });
 
 teste("nome + só um campo de ticket é válido (sem texto)", () => {
-  assert.strictEqual(P.validar({ nome: "Só serviço", servico: "Administrativo" }).ok, true);
+  assert.strictEqual(P.validar({ nome: "Só serviço", sistema: "DataSys", servico: "Administrativo" }).ok, true);
   assert.strictEqual(P.validar({ nome: "Só urgência", urgencia: "Dúvidas" }).ok, true);
+});
+
+teste("servico sem sistema é inválido", () => {
+  const r = P.validar({ nome: "Sem sistema", servico: "Integrações" });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /sistema/i);
+});
+
+teste("sistema sozinho não satisfaz o pelo menos um", () => {
+  const r = P.validar({ nome: "Só sistema", sistema: "Assist" });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /texto de expansão|campo do ticket/i);
+});
+
+teste("sistema + servico é válido", () => {
+  assert.strictEqual(P.validar({ nome: "Ok", sistema: "Assist", servico: "SAC" }).ok, true);
+});
+
+teste("completar devolve sistema como string vazia quando ausente", () => {
+  assert.strictEqual(P.completar({ nome: "X" }).sistema, "");
+  assert.strictEqual(P.completar({ nome: "X", sistema: " Assist " }).sistema, "Assist");
+});
+
+teste("salvar e listar preservam o sistema", async () => {
+  reset();
+  await P.salvar({ nome: "Com sistema", sistema: "Gaia", servico: "Fiscal" });
+  const lista = await P.listar();
+  assert.strictEqual(lista[0].sistema, "Gaia");
+  assert.strictEqual(lista[0].servico, "Fiscal");
+});
+
+// ---------- migração v2 -> v3 ----------
+teste("migração v3 marca como DataSys o preset que tem servico e não tem sistema", async () => {
+  reset({ presetsVersao: 2, "preset:a": { id: "a", nome: "A", servico: "Administrativo", texto: "x" } });
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 3);
+  const lista = await P.listar();
+  assert.strictEqual(lista[0].sistema, "DataSys");
+  assert.strictEqual(lista[0].servico, "Administrativo");
+});
+
+teste("migração v3 não toca preset sem servico", async () => {
+  reset({ presetsVersao: 2, "preset:b": { id: "b", nome: "Assinatura", texto: "Att" } });
+  await P.migrar();
+  const lista = await P.listar();
+  assert.strictEqual(lista[0].sistema, "", "preset só-texto não pode ganhar sistema");
+});
+
+teste("migração v3 não sobrescreve sistema já escolhido", async () => {
+  reset({ presetsVersao: 2, "preset:c": { id: "c", nome: "C", sistema: "Unipark", servico: "Conveniado", texto: "x" } });
+  await P.migrar();
+  const lista = await P.listar();
+  assert.strictEqual(lista[0].sistema, "Unipark");
+});
+
+teste("formato antigo migra direto para v3, com sistema preenchido", async () => {
+  reset({
+    presets: {
+      "Emissão de nota": { resumo: "erro na emissão", comando: "eemi", servico: "Administrativo" },
+      "Bom dia": { resumo: "Bom dia!", comando: "bbom" },
+    },
+  });
+  await P.migrar();
+  assert.strictEqual(dados.presetsVersao, 3);
+  assert.strictEqual("presets" in dados, false);
+  const lista = await P.listar();
+  const emissao = lista.find((p) => p.nome === "Emissão de nota");
+  const bomDia = lista.find((p) => p.nome === "Bom dia");
+  assert.strictEqual(emissao.sistema, "DataSys");
+  assert.strictEqual(emissao.texto, "erro na emissão");
+  assert.strictEqual(bomDia.sistema, "", "preset só-texto não ganha sistema nem vindo do formato 1");
 });
 
 teste("comando é opcional", () => {

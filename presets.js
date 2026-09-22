@@ -9,7 +9,10 @@
   if (raiz.Presets) return;
 
   const PREFIXO = "preset:";
-  const VERSAO = 2;
+  const VERSAO = 3;
+  // Todo preset criado antes da v3 é necessariamente DataSys: `PAI_SERVICO`
+  // era constante no content.js, não havia outra opção possível.
+  const SISTEMA_LEGADO = "DataSys";
   const CAMPOS_TICKET = ["assunto", "servico", "categoria", "urgencia"];
 
   // chrome.storage já devolve Promise no Chrome moderno, mas manter o
@@ -40,6 +43,7 @@
       comando: t(p && p.comando),
       texto: p && p.texto != null ? String(p.texto) : "", // texto preserva espaços/linhas
       assunto: t(p && p.assunto),
+      sistema: t(p && p.sistema),
       servico: t(p && p.servico),
       categoria: t(p && p.categoria),
       urgencia: t(p && p.urgencia),
@@ -49,6 +53,11 @@
   function validar(p) {
     const c = completar(p);
     if (!c.nome) return { ok: false, motivo: "Dê um nome ao preset." };
+    // Serviço sem sistema é ambíguo: 11 nomes de serviço existem em mais de um
+    // sistema ("Integrações" em 6 deles), então o par é que identifica.
+    if (c.servico && !c.sistema) {
+      return { ok: false, motivo: "Escolha o sistema do serviço." };
+    }
     if (!c.texto.trim() && !CAMPOS_TICKET.some((k) => c[k])) {
       return {
         ok: false,
@@ -144,6 +153,18 @@
       // Um set por preset: se um estourar 8KB, os outros ainda entram e o
       // erro diz qual falhou, em vez de perder a migração inteira.
       await gravar({ [PREFIXO + convertido.id]: convertido });
+    }
+
+    // Passo v2 -> v3: relê o storage porque o laço acima pode ter acabado de
+    // gravar presets novos, que também precisam do sistema. Roda sempre que
+    // chegamos aqui (a guarda no topo já garantiu que há trabalho a fazer),
+    // e é idempotente: pula quem já tem sistema.
+    const apos = await ler(null);
+    for (const chave of Object.keys(apos)) {
+      if (!chave.startsWith(PREFIXO)) continue;
+      const p = completar(apos[chave]);
+      if (!p.servico || p.sistema) continue;
+      await gravar({ [chave]: Object.assign({}, p, { sistema: SISTEMA_LEGADO }) });
     }
 
     await gravar({ presetsVersao: VERSAO });
