@@ -76,6 +76,11 @@ Duas coisas no `content.js` parecem arbitrárias e não são:
 - **`acharVisivel` usa só `offsetParent !== null`.** O Movidesk mantém várias
   abas de ticket no mesmo DOM, todas com os mesmos seletores. Sem esse filtro
   a extensão clica na cópia de uma aba oculta.
+- **`acharLiPai` identifica o nó-pai pela seta de expandir, não pela classe
+  `.notSelectable`.** Seis dos 19 sistemas (Autua, Cadastro de Declaração de
+  Grande Gerador, Gaia, Scripts CSJ, Sistema TRS, Unipark) não têm essa
+  classe. Medido em 2026-09-22; com a classe no filtro, os presets desses
+  sistemas falhavam com "não encontrado na árvore".
 
 A busca do serviço é escopada ao nó-pai `DataSys` de propósito: existem filhos
 de mesmo nome sob pais diferentes (há um "Administrativo" em DataSys e outro em
@@ -83,10 +88,13 @@ Assist), então uma busca global clica no errado.
 
 ## Ajustes comuns
 
-- **Listas de serviço, categoria e urgência:** objeto `OPCOES` no topo do
-  `dashboard.js`. São listas fixas, por decisão de projeto — não capturamos as
-  opções da página. Os nomes precisam ser **exatos**, porque o `content.js`
-  casa a opção pelo texto normalizado, não por id.
+- **Árvore de serviço, categoria e urgência:** objeto `OPCOES` no topo do
+  `dashboard.js`. `OPCOES.sistemas` é a árvore `sistema → serviços` (19
+  sistemas, 105 serviços); `categoria` e `urgencia` são listas planas e valem
+  para todos os sistemas. São listas fixas, por decisão de projeto — não
+  capturamos as opções da página. Os nomes precisam ser **exatos**, porque o
+  `content.js` casa a opção pelo texto normalizado, não por id. Os sistemas
+  Omni e SKY - Conferência Detalhada ainda não foram capturados.
 - **Perguntas da enquete:** lista `PERGUNTAS` no topo do `content.js`, em
   minúsculas e sem acentos.
 - **Outro subdomínio:** `matches` no `manifest.json`.
