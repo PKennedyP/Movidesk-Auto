@@ -464,6 +464,12 @@
     leitor.onerror = () => mostrarErro("Não consegui ler o arquivo.");
     leitor.onload = async () => {
       try {
+        // Fecha a exclusão pendente ANTES de ler: senão o preset que o usuário
+        // acabou de excluir ainda aparece no storage, o resumo o classifica
+        // como "idêntico", o botão Importar nasce desabilitado, e o timer o
+        // apaga logo depois. É justamente o caso de recuperar uma exclusão por
+        // engano importando o backup.
+        confirmarExclusao();
         const atuais = await Presets.listar();
         const r = Presets.planejarImportacao(String(leitor.result), atuais);
         if (!r.ok) { fecharResumo(); mostrarErro(r.motivo); return; }
