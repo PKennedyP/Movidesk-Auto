@@ -46,6 +46,11 @@ duplicar e excluir presets. Excluir abre uma janela de 6 segundos com
   recarregar a página. Desligar não desmarca o que já foi marcado.
 - **Exigir delimitador** — o comando só dispara após espaço ou pontuação, o
   que evita expansão acidental no meio de uma palavra.
+- **Backup dos presets** — **Exportar** baixa um `.json` com todos os presets;
+  **Importar** lê esse arquivo de volta. A importação mostra um resumo antes de
+  gravar e **nunca apaga**: preset que existe só no navegador e não está no
+  arquivo permanece. Comando repetido entra sem o comando, e o resumo diz de
+  quem ele era.
 
 ## Arquitetura
 
