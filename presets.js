@@ -179,6 +179,130 @@
     await apagar(["presets", "rascunhoFechamento"]);
   }
 
+  // ---------- backup em arquivo ----------
+
+  const FORMATO = "auto-movidesk-presets";
+  const VERSAO_ARQUIVO = 1;
+  const CAMPOS = ["id", "nome", "comando", "texto", "assunto", "sistema", "servico", "categoria", "urgencia"];
+
+  function montarExportacao(lista) {
+    return {
+      formato: FORMATO,
+      versao: VERSAO_ARQUIVO,
+      exportadoEm: new Date().toISOString(),
+      presets: lista.map(completar),
+    };
+  }
+
+  const mesmoConteudo = (a, b) => CAMPOS.every((k) => a[k] === b[k]);
+
+  // Recebe o TEXTO cru do arquivo, não um objeto já parseado: assim todos os
+  // motivos de recusa moram neste mesmo lugar testado, em vez de o JSON
+  // inválido ser tratado na tela e os outros três aqui.
+  //
+  // Não escreve nada. Devolve o que VAI acontecer, para a tela poder mostrar
+  // e o usuário poder cancelar -- a mesclagem sobrescreve, e sobrescrever um
+  // preset editado ontem com a versão de três meses atrás é perda de dado.
+  function planejarImportacao(texto, atuais) {
+    let bruto;
+    try {
+      bruto = JSON.parse(texto);
+    } catch (e) {
+      return { ok: false, motivo: "Não consegui ler o arquivo: não é um JSON válido." };
+    }
+    if (!bruto || bruto.formato !== FORMATO) {
+      return { ok: false, motivo: "Este arquivo não é um backup de presets do Auto Movidesk (formato não reconhecido)." };
+    }
+    if (bruto.versao !== VERSAO_ARQUIVO) {
+      return { ok: false, motivo: `Versão de arquivo desconhecida (${bruto.versao}). Esta extensão lê a versão ${VERSAO_ARQUIVO}.` };
+    }
+    if (!Array.isArray(bruto.presets)) {
+      return { ok: false, motivo: "O arquivo não tem uma lista de presets." };
+    }
+
+    const porId = {};
+    for (const p of atuais) porId[p.id] = completar(p);
+
+    const plano = {
+      exportadoEm: bruto.exportadoEm || "",
+      novos: 0, substituem: 0, identicos: 0,
+      semComando: [], ignorados: [],
+    };
+
+    // Comandos já em uso, para detectar conflito. Mapeia comando -> nome do
+    // dono, para a mensagem poder dizer de quem era.
+    const donoDoComando = {};
+    for (const p of atuais) if (p.comando) donoDoComando[p.comando] = p.nome;
+
+    const aGravar = {};
+    for (const cru of bruto.presets) {
+      const p = completar(cru);
+      const v = validar(p);
+      if (!v.ok) {
+        plano.ignorados.push({ nome: p.nome || "(sem nome)", motivo: v.motivo });
+        continue;
+      }
+      if (!p.id) {
+        plano.ignorados.push({ nome: p.nome, motivo: "Preset sem id no arquivo." });
+        continue;
+      }
+      if (aGravar[p.id]) {
+        // Id repetido no próprio arquivo: vence o último, mas o descartado
+        // aparece, para não sumir em silêncio.
+        plano.ignorados.push({ nome: aGravar[p.id].nome, motivo: `Id repetido no arquivo (${p.id}); ficou a última ocorrência.` });
+      }
+      aGravar[p.id] = p;
+    }
+
+    const presets = [];
+    for (const id of Object.keys(aGravar)) {
+      const p = aGravar[id];
+      const atual = porId[id];
+
+      // Este preset está substituindo um que tinha OUTRO comando: aquele
+      // comando fica livre. Sem isto, um arquivo que move o comando "aa" do
+      // preset 1 para o preset 3 faria o 3 perder "aa" por um conflito com o
+      // dono que acabou de abrir mão dele.
+      if (atual && atual.comando && atual.comando !== p.comando) {
+        delete donoDoComando[atual.comando];
+      }
+
+      // O comando do próprio preset (mesmo id) não conflita consigo mesmo.
+      if (p.comando && donoDoComando[p.comando] && (!atual || atual.comando !== p.comando)) {
+        plano.semComando.push({ nome: p.nome, comando: p.comando, donoDoComando: donoDoComando[p.comando] });
+        p.comando = "";
+      } else if (p.comando) {
+        donoDoComando[p.comando] = p.nome;
+      }
+
+      if (atual && mesmoConteudo(atual, p)) {
+        plano.identicos++;
+        continue; // nada a gravar
+      }
+      if (atual) plano.substituem++;
+      else plano.novos++;
+      presets.push(p);
+    }
+
+    return { ok: true, plano, presets };
+  }
+
+  // Uma escrita por preset, como a migração: se uma estourar a cota, as
+  // outras ainda entram e o relatório diz qual falhou.
+  async function aplicarImportacao(presets) {
+    let gravados = 0;
+    const falhas = [];
+    for (const p of presets) {
+      try {
+        await gravar({ [PREFIXO + p.id]: p });
+        gravados++;
+      } catch (e) {
+        falhas.push({ nome: p.nome, motivo: e.message });
+      }
+    }
+    return { gravados, falhas };
+  }
+
   raiz.Presets = {
     PREFIXO,
     completar,
@@ -190,5 +314,8 @@
     salvar,
     excluir,
     migrar,
+    montarExportacao,
+    planejarImportacao,
+    aplicarImportacao,
   };
 })();

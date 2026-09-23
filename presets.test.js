@@ -352,6 +352,183 @@ teste("migrar nao colide ids de nomes que diferem so por espaco no fim", async (
   assert.deepStrictEqual(lista.map((p) => p.texto).sort(), ["primeiro", "segundo"]);
 });
 
+// ---------- backup: exportação ----------
+teste("montarExportacao devolve o envelope com formato, versao e presets", () => {
+  const env = P.montarExportacao([{ id: "a", nome: "A", texto: "x" }]);
+  assert.strictEqual(env.formato, "auto-movidesk-presets");
+  assert.strictEqual(env.versao, 1);
+  assert.strictEqual(env.presets.length, 1);
+  assert.ok(env.exportadoEm, "exportadoEm precisa estar preenchido");
+  assert.ok(!Number.isNaN(Date.parse(env.exportadoEm)), "exportadoEm precisa ser data ISO");
+});
+
+teste("montarExportacao normaliza os presets pelo completar", () => {
+  const env = P.montarExportacao([{ id: " a ", nome: " A ", texto: "x" }]);
+  assert.strictEqual(env.presets[0].id, "a");
+  assert.strictEqual(env.presets[0].nome, "A");
+  assert.strictEqual(env.presets[0].sistema, "", "campo ausente vira string vazia");
+});
+
+// ---------- backup: recusa de arquivo ----------
+teste("planejarImportacao recusa JSON invalido", () => {
+  const r = P.planejarImportacao("{isso nao e json", []);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /json|arquivo/i);
+});
+
+teste("planejarImportacao recusa formato desconhecido", () => {
+  const r = P.planejarImportacao(JSON.stringify({ formato: "outra-coisa", versao: 1, presets: [] }), []);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /formato/i);
+});
+
+teste("planejarImportacao recusa versao desconhecida", () => {
+  const r = P.planejarImportacao(JSON.stringify({ formato: "auto-movidesk-presets", versao: 99, presets: [] }), []);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /vers/i);
+});
+
+teste("planejarImportacao recusa presets que nao e array", () => {
+  const r = P.planejarImportacao(JSON.stringify({ formato: "auto-movidesk-presets", versao: 1, presets: {} }), []);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.motivo, /presets/i);
+});
+
+// ---------- backup: mesclagem ----------
+function envelope(presets) {
+  return JSON.stringify({
+    formato: "auto-movidesk-presets",
+    versao: 1,
+    exportadoEm: "2026-09-23T14:32:00.000Z",
+    presets,
+  });
+}
+
+teste("planejarImportacao conta novos, substituem e identicos", () => {
+  const atuais = [
+    P.completar({ id: "igual", nome: "Igual", texto: "mesmo" }),
+    P.completar({ id: "muda", nome: "Muda", texto: "antigo" }),
+  ];
+  const r = P.planejarImportacao(envelope([
+    { id: "igual", nome: "Igual", texto: "mesmo" },
+    { id: "muda", nome: "Muda", texto: "novo" },
+    { id: "extra", nome: "Extra", texto: "n" },
+  ]), atuais);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.plano.identicos, 1);
+  assert.strictEqual(r.plano.substituem, 1);
+  assert.strictEqual(r.plano.novos, 1);
+  assert.strictEqual(r.plano.exportadoEm, "2026-09-23T14:32:00.000Z");
+  assert.strictEqual(r.presets.length, 2, "identico nao entra na lista a gravar");
+});
+
+teste("preset ausente do arquivo sobrevive", () => {
+  const atuais = [P.completar({ id: "so-no-navegador", nome: "Meu", texto: "x" })];
+  const r = P.planejarImportacao(envelope([{ id: "outro", nome: "Outro", texto: "y" }]), atuais);
+  assert.strictEqual(r.ok, true);
+  const ids = r.presets.map((p) => p.id);
+  assert.strictEqual(ids.indexOf("so-no-navegador"), -1,
+    "nao pode aparecer na lista a gravar, e tambem nao pode ser apagado: a importacao so grava");
+  assert.strictEqual(r.plano.novos, 1);
+});
+
+teste("exportar e reimportar e no-op", () => {
+  const atuais = [
+    P.completar({ id: "a", nome: "A", comando: "aa", texto: "x", sistema: "Assist", servico: "SAC" }),
+    P.completar({ id: "b", nome: "B", texto: "y" }),
+  ];
+  const env = P.montarExportacao(atuais);
+  const r = P.planejarImportacao(JSON.stringify(env), atuais);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.plano.identicos, 2);
+  assert.strictEqual(r.plano.novos, 0);
+  assert.strictEqual(r.plano.substituem, 0);
+  assert.strictEqual(r.presets.length, 0, "nada a gravar");
+});
+
+// ---------- backup: conflitos e inválidos ----------
+teste("comando repetido com preset existente entra sem comando", () => {
+  const atuais = [P.completar({ id: "dono", nome: "Emissão de nota", comando: "eemi", texto: "x" })];
+  const r = P.planejarImportacao(envelope([{ id: "novo", nome: "SAC", comando: "eemi", texto: "y" }]), atuais);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.presets[0].comando, "", "o comando tem que ser limpo");
+  assert.strictEqual(r.presets[0].nome, "SAC", "o preset entra inteiro");
+  assert.strictEqual(r.plano.semComando.length, 1);
+  assert.strictEqual(r.plano.semComando[0].comando, "eemi");
+  assert.strictEqual(r.plano.semComando[0].donoDoComando, "Emissão de nota");
+});
+
+teste("comando repetido dentro do arquivo: o segundo perde", () => {
+  const r = P.planejarImportacao(envelope([
+    { id: "um", nome: "Um", comando: "zz", texto: "a" },
+    { id: "dois", nome: "Dois", comando: "zz", texto: "b" },
+  ]), []);
+  assert.strictEqual(r.ok, true);
+  const um = r.presets.find((p) => p.id === "um");
+  const dois = r.presets.find((p) => p.id === "dois");
+  assert.strictEqual(um.comando, "zz", "o primeiro mantem");
+  assert.strictEqual(dois.comando, "", "o segundo perde");
+  assert.strictEqual(r.plano.semComando.length, 1);
+  assert.strictEqual(r.plano.semComando[0].donoDoComando, "Um");
+});
+
+teste("comando liberado por quem o tinha pode ser assumido por outro preset", () => {
+  const atuais = [P.completar({ id: "um", nome: "Um", comando: "aa", texto: "x" })];
+  const r = P.planejarImportacao(envelope([
+    { id: "um", nome: "Um", comando: "cc", texto: "x" },   // solta o "aa"
+    { id: "tres", nome: "Tres", comando: "aa", texto: "z" }, // assume o "aa"
+  ]), atuais);
+  assert.strictEqual(r.ok, true);
+  const tres = r.presets.find((p) => p.id === "tres");
+  assert.strictEqual(tres.comando, "aa", "o comando foi liberado, nao pode dar conflito");
+  assert.strictEqual(r.plano.semComando.length, 0);
+});
+
+teste("preset incompleto e ignorado e contado", () => {
+  const r = P.planejarImportacao(envelope([
+    { id: "bom", nome: "Bom", texto: "x" },
+    { id: "ruim", nome: "", texto: "y" },
+    { id: "vazio", nome: "Vazio" },
+  ]), []);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.presets.length, 1, "so o valido entra");
+  assert.strictEqual(r.plano.ignorados.length, 2);
+  assert.ok(r.plano.ignorados[0].motivo, "cada ignorado precisa de motivo");
+});
+
+teste("id repetido no arquivo: vence o ultimo, e o caso e registrado", () => {
+  const r = P.planejarImportacao(envelope([
+    { id: "x", nome: "Primeiro", texto: "a" },
+    { id: "x", nome: "Segundo", texto: "b" },
+  ]), []);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.presets.length, 1);
+  assert.strictEqual(r.presets[0].nome, "Segundo");
+  assert.strictEqual(r.plano.ignorados.length, 1, "a ocorrencia descartada tem que aparecer");
+});
+
+// ---------- backup: gravação ----------
+teste("aplicarImportacao grava e conta, e uma falha nao derruba as outras", async () => {
+  reset();
+  const r = await P.aplicarImportacao([
+    P.completar({ id: "a", nome: "A", texto: "x" }),
+    P.completar({ id: "b", nome: "B", texto: "y" }),
+  ]);
+  assert.strictEqual(r.gravados, 2);
+  assert.strictEqual(r.falhas.length, 0);
+  assert.strictEqual((await P.listar()).length, 2);
+
+  reset();
+  erroNoSet = "quota exceeded";
+  const r2 = await P.aplicarImportacao([
+    P.completar({ id: "a", nome: "A", texto: "x" }),
+    P.completar({ id: "b", nome: "B", texto: "y" }),
+  ]);
+  assert.strictEqual(r2.falhas.length, 1, "a primeira falha e registrada");
+  assert.strictEqual(r2.gravados, 1, "a segunda ainda entra");
+  assert.strictEqual(r2.falhas[0].nome, "A");
+});
+
 // ---------- execução ----------
 (async () => {
   let falhas = 0;
