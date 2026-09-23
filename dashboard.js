@@ -424,16 +424,20 @@
   }
 
   const elResumo = $("resumo-import");
-  let presetsPendentes = null;
+  // Guarda o TEXTO do arquivo, não a lista já planejada: o resumo fica na tela
+  // por tempo indefinido, e o storage pode mudar nesse meio -- inclusive pela
+  // janela de 6s do desfazer da exclusão. Replanejar na confirmação é o que
+  // faz "excluir por engano e importar o backup" devolver o preset.
+  let textoPendente = null;
 
   function fecharResumo() {
     elResumo.classList.remove("visivel");
     elResumo.innerHTML = "";
-    presetsPendentes = null;
+    textoPendente = null;
   }
 
-  function mostrarResumo(plano, presets) {
-    presetsPendentes = presets;
+  function mostrarResumo(plano, presets, texto) {
+    textoPendente = texto;
     const dia = plano.exportadoEm ? plano.exportadoEm.slice(0, 10).split("-").reverse().join("/") : "data desconhecida";
     const linhas = [];
     if (plano.novos) linhas.push(`${plano.novos} novo(s)`);
@@ -446,7 +450,7 @@
       linhas.push(`"${esc(i.nome)}" ignorado: ${esc(i.motivo)}`);
     }
     elResumo.innerHTML = `
-      <div><b>Arquivo de ${esc(dia)}</b>, com ${plano.novos + plano.substituem + plano.identicos} preset(s).</div>
+      <div><b>Arquivo de ${esc(dia)}</b>, com ${plano.novos + plano.substituem + plano.identicos + plano.ignorados.length} preset(s).</div>
       <ul>${linhas.map((l) => `<li>${l}</li>`).join("")}</ul>
       <div class="acoes">
         <button class="btn btn-primario" data-acao="confirmar-import"${presets.length ? "" : " disabled"}>Importar</button>
@@ -463,7 +467,7 @@
         const atuais = await Presets.listar();
         const r = Presets.planejarImportacao(String(leitor.result), atuais);
         if (!r.ok) { fecharResumo(); mostrarErro(r.motivo); return; }
-        mostrarResumo(r.plano, r.presets);
+        mostrarResumo(r.plano, r.presets, String(leitor.result));
       } catch (e) {
         mostrarErro("Não deu para preparar a importação: " + e.message);
       }
@@ -472,17 +476,28 @@
   }
 
   async function confirmarImportacao() {
-    if (!presetsPendentes) return;
-    const lista = presetsPendentes;
+    if (!textoPendente) return;
+    const texto = textoPendente;
     fecharResumo();
     try {
-      const r = await Presets.aplicarImportacao(lista);
+      // Fecha qualquer exclusão pendente ANTES de reler: senão o preset que o
+      // usuário acabou de excluir ainda aparece no storage, é classificado como
+      // "idêntico", não é gravado, e o timer o apaga logo depois.
+      confirmarExclusao();
+      // Replaneja contra o storage de agora. O resumo pode ter ficado minutos
+      // na tela; aplicar a lista congelada gravaria decisões tomadas sobre um
+      // retrato velho.
+      const atuais = await Presets.listar();
+      const r = Presets.planejarImportacao(texto, atuais);
+      if (!r.ok) { mostrarErro(r.motivo); return; }
+
+      const res = await Presets.aplicarImportacao(r.presets);
       await recarregar();
-      if (r.falhas.length) {
-        mostrarErro(`${r.gravados} importado(s), ${r.falhas.length} falhou(aram): ` +
-          r.falhas.map((f) => `${f.nome} (${f.motivo})`).join("; "));
+      if (res.falhas.length) {
+        mostrarErro(`${res.gravados} importado(s), ${res.falhas.length} falhou(aram): ` +
+          res.falhas.map((f) => `${f.nome} (${f.motivo})`).join("; "));
       } else {
-        mostrarErro(`${r.gravados} preset(s) importado(s).`);
+        mostrarErro(`${res.gravados} preset(s) importado(s).`);
       }
     } catch (e) {
       mostrarErro("Não deu para importar: " + e.message);

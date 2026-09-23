@@ -522,6 +522,19 @@ teste("id repetido no arquivo: vence o ultimo, e o caso e registrado", () => {
   assert.strictEqual(r.plano.ignorados.length, 1, "a ocorrencia descartada tem que aparecer");
 });
 
+teste("id e comando hostis do arquivo nao envenenam os mapas", () => {
+  const r = P.planejarImportacao(envelope([
+    { id: "__proto__", nome: "Veneno", texto: "x" },
+    { id: "normal", nome: "Normal", texto: "y" },
+    { id: "nome", nome: "Chave de campo", texto: "z" },
+  ]), []);
+  assert.strictEqual(r.ok, true);
+  const ids = r.presets.map((p) => p.id).sort();
+  assert.deepStrictEqual(ids, ["__proto__", "nome", "normal"],
+    "os tres tem que ser gravados, inclusive o id __proto__");
+  assert.strictEqual(r.plano.ignorados.length, 0, "nenhum 'Id repetido' espurio");
+});
+
 // ---------- backup: gravação ----------
 teste("aplicarImportacao grava e conta, e uma falha nao derruba as outras", async () => {
   reset();
@@ -542,6 +555,19 @@ teste("aplicarImportacao grava e conta, e uma falha nao derruba as outras", asyn
   assert.strictEqual(r2.falhas.length, 1, "a primeira falha e registrada");
   assert.strictEqual(r2.gravados, 1, "a segunda ainda entra");
   assert.strictEqual(r2.falhas[0].nome, "A");
+});
+
+teste("aplicarImportacao NUNCA apaga preset que nao esta no arquivo", async () => {
+  reset();
+  await P.salvar({ id: "fica", nome: "Fica", texto: "x" });
+  await P.salvar({ id: "tambem-fica", nome: "Tambem fica", texto: "y" });
+
+  // Uma importacao que nao menciona nenhum dos dois.
+  await P.aplicarImportacao([P.completar({ id: "novo", nome: "Novo", texto: "z" })]);
+
+  const nomes = (await P.listar()).map((p) => p.nome).sort();
+  assert.deepStrictEqual(nomes, ["Fica", "Novo", "Tambem fica"],
+    "importar nao pode remover preset nenhum do storage");
 });
 
 // ---------- execução ----------

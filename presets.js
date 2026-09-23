@@ -224,21 +224,24 @@
       return { ok: false, motivo: "O arquivo não tem uma lista de presets." };
     }
 
-    const porId = {};
+    const porId = Object.create(null);
     for (const p of atuais) porId[p.id] = completar(p);
 
     const plano = {
-      exportadoEm: bruto.exportadoEm || "",
+      // String(): o campo vem do arquivo e vai direto para a tela, que faz
+      // .slice() nele. Um número aqui derrubaria a preparação de um arquivo
+      // que no resto está perfeito.
+      exportadoEm: String(bruto.exportadoEm || ""),
       novos: 0, substituem: 0, identicos: 0,
       semComando: [], ignorados: [],
     };
 
     // Comandos já em uso, para detectar conflito. Mapeia comando -> nome do
     // dono, para a mensagem poder dizer de quem era.
-    const donoDoComando = {};
+    const donoDoComando = Object.create(null);
     for (const p of atuais) if (p.comando) donoDoComando[p.comando] = p.nome;
 
-    const aGravar = {};
+    const aGravar = new Map();
     for (const cru of bruto.presets) {
       const p = completar(cru);
       const v = validar(p);
@@ -250,12 +253,12 @@
         plano.ignorados.push({ nome: p.nome, motivo: "Preset sem id no arquivo." });
         continue;
       }
-      if (aGravar[p.id]) {
+      if (aGravar.has(p.id)) {
         // Id repetido no próprio arquivo: vence o último, mas o descartado
         // aparece, para não sumir em silêncio.
-        plano.ignorados.push({ nome: aGravar[p.id].nome, motivo: `Id repetido no arquivo (${p.id}); ficou a última ocorrência.` });
+        plano.ignorados.push({ nome: aGravar.get(p.id).nome, motivo: `Id repetido no arquivo (${p.id}); ficou a última ocorrência.` });
       }
-      aGravar[p.id] = p;
+      aGravar.set(p.id, p);
     }
 
     // Passo separado, ANTES de resolver conflito: todo preset que o arquivo
@@ -263,16 +266,20 @@
     // dentro do laço abaixo só libera para quem vem depois no arquivo -- e o
     // nosso próprio export sai ordenado por nome, então mover um comando para
     // um preset alfabeticamente anterior cairia justamente no caso ruim.
-    for (const id of Object.keys(aGravar)) {
+    //
+    // Map, e não objeto: as chaves vêm do arquivo, que é entrada não confiável.
+    // Um id "__proto__" num objeto literal trocaria o protótipo do mapa em vez
+    // de criar chave, e um id numérico faria o Object.keys reordenar o
+    // processamento, invertendo a regra "o segundo perde o comando".
+    for (const [id, p] of aGravar) {
       const atual = porId[id];
-      if (atual && atual.comando && atual.comando !== aGravar[id].comando) {
+      if (atual && atual.comando && atual.comando !== p.comando) {
         delete donoDoComando[atual.comando];
       }
     }
 
     const presets = [];
-    for (const id of Object.keys(aGravar)) {
-      const p = aGravar[id];
+    for (const [id, p] of aGravar) {
       const atual = porId[id];
 
       // O comando do próprio preset (mesmo id) não conflita consigo mesmo.
