@@ -183,7 +183,11 @@
 
   const FORMATO = "auto-movidesk-presets";
   const VERSAO_ARQUIVO = 1;
-  const CAMPOS = ["id", "nome", "comando", "texto", "assunto", "sistema", "servico", "categoria", "urgencia"];
+  // Derivado do próprio completar(), nunca escrito à mão: uma lista paralela
+  // que alguém esquecesse de atualizar ao acrescentar um campo faria dois
+  // presets diferentes contarem como "idênticos", e a importação não gravaria
+  // a mudança -- o usuário restauraria um backup achando que restaurou.
+  const CAMPOS = Object.keys(completar({}));
 
   function montarExportacao(lista) {
     return {
@@ -254,18 +258,22 @@
       aGravar[p.id] = p;
     }
 
+    // Passo separado, ANTES de resolver conflito: todo preset que o arquivo
+    // substitui e que muda de comando libera o comando antigo. Resolver isso
+    // dentro do laço abaixo só libera para quem vem depois no arquivo -- e o
+    // nosso próprio export sai ordenado por nome, então mover um comando para
+    // um preset alfabeticamente anterior cairia justamente no caso ruim.
+    for (const id of Object.keys(aGravar)) {
+      const atual = porId[id];
+      if (atual && atual.comando && atual.comando !== aGravar[id].comando) {
+        delete donoDoComando[atual.comando];
+      }
+    }
+
     const presets = [];
     for (const id of Object.keys(aGravar)) {
       const p = aGravar[id];
       const atual = porId[id];
-
-      // Este preset está substituindo um que tinha OUTRO comando: aquele
-      // comando fica livre. Sem isto, um arquivo que move o comando "aa" do
-      // preset 1 para o preset 3 faria o 3 perder "aa" por um conflito com o
-      // dono que acabou de abrir mão dele.
-      if (atual && atual.comando && atual.comando !== p.comando) {
-        delete donoDoComando[atual.comando];
-      }
 
       // O comando do próprio preset (mesmo id) não conflita consigo mesmo.
       if (p.comando && donoDoComando[p.comando] && (!atual || atual.comando !== p.comando)) {

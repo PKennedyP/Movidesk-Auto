@@ -484,6 +484,21 @@ teste("comando liberado por quem o tinha pode ser assumido por outro preset", ()
   assert.strictEqual(r.plano.semComando.length, 0);
 });
 
+teste("comando liberado funciona mesmo se o assumidor vier ANTES no arquivo", () => {
+  const atuais = [
+    P.completar({ id: "zulu", nome: "Zulu", comando: "aa", texto: "z" }),
+    P.completar({ id: "alfa", nome: "Alfa", comando: "qq", texto: "a" }),
+  ];
+  const r = P.planejarImportacao(envelope([
+    { id: "alfa", nome: "Alfa", comando: "aa", texto: "a" },  // assume, e vem PRIMEIRO
+    { id: "zulu", nome: "Zulu", comando: "", texto: "z" },    // libera, e vem DEPOIS
+  ]), atuais);
+  assert.strictEqual(r.ok, true);
+  const alfa = r.presets.find((p) => p.id === "alfa");
+  assert.strictEqual(alfa.comando, "aa", "o comando foi liberado no mesmo arquivo, nao pode dar conflito");
+  assert.strictEqual(r.plano.semComando.length, 0);
+});
+
 teste("preset incompleto e ignorado e contado", () => {
   const r = P.planejarImportacao(envelope([
     { id: "bom", nome: "Bom", texto: "x" },
