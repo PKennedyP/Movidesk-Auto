@@ -397,6 +397,98 @@
     });
   }
 
+  // ---------- backup em arquivo ----------
+
+  // Sem permissão `downloads`: um <a download> com object URL basta, e a
+  // permissão daria acesso ao histórico de downloads inteiro do usuário.
+  function baixarArquivo(nome, texto) {
+    const url = URL.createObjectURL(new Blob([texto], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nome;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportar() {
+    try {
+      const lista = await Presets.listar();
+      if (!lista.length) { mostrarErro("Nenhum preset para exportar."); return; }
+      const env = Presets.montarExportacao(lista);
+      const dia = env.exportadoEm.slice(0, 10);
+      baixarArquivo(`auto-movidesk-presets-${dia}.json`, JSON.stringify(env, null, 2));
+      mostrarErro(`${lista.length} preset(s) exportado(s).`);
+    } catch (e) {
+      mostrarErro("Não deu para exportar: " + e.message);
+    }
+  }
+
+  const elResumo = $("resumo-import");
+  let presetsPendentes = null;
+
+  function fecharResumo() {
+    elResumo.classList.remove("visivel");
+    elResumo.innerHTML = "";
+    presetsPendentes = null;
+  }
+
+  function mostrarResumo(plano, presets) {
+    presetsPendentes = presets;
+    const dia = plano.exportadoEm ? plano.exportadoEm.slice(0, 10).split("-").reverse().join("/") : "data desconhecida";
+    const linhas = [];
+    if (plano.novos) linhas.push(`${plano.novos} novo(s)`);
+    if (plano.substituem) linhas.push(`${plano.substituem} substitui(em) o preset atual`);
+    if (plano.identicos) linhas.push(`${plano.identicos} idêntico(s), nada a fazer`);
+    for (const c of plano.semComando) {
+      linhas.push(`"${esc(c.nome)}" entra sem comando: "${esc(c.comando)}" já é do preset "${esc(c.donoDoComando)}"`);
+    }
+    for (const i of plano.ignorados) {
+      linhas.push(`"${esc(i.nome)}" ignorado: ${esc(i.motivo)}`);
+    }
+    elResumo.innerHTML = `
+      <div><b>Arquivo de ${esc(dia)}</b>, com ${plano.novos + plano.substituem + plano.identicos} preset(s).</div>
+      <ul>${linhas.map((l) => `<li>${l}</li>`).join("")}</ul>
+      <div class="acoes">
+        <button class="btn btn-primario" data-acao="confirmar-import"${presets.length ? "" : " disabled"}>Importar</button>
+        <button class="btn" data-acao="cancelar-import">Cancelar</button>
+      </div>`;
+    elResumo.classList.add("visivel");
+  }
+
+  function lerArquivoEscolhido(arquivo) {
+    const leitor = new FileReader();
+    leitor.onerror = () => mostrarErro("Não consegui ler o arquivo.");
+    leitor.onload = async () => {
+      try {
+        const atuais = await Presets.listar();
+        const r = Presets.planejarImportacao(String(leitor.result), atuais);
+        if (!r.ok) { fecharResumo(); mostrarErro(r.motivo); return; }
+        mostrarResumo(r.plano, r.presets);
+      } catch (e) {
+        mostrarErro("Não deu para preparar a importação: " + e.message);
+      }
+    };
+    leitor.readAsText(arquivo);
+  }
+
+  async function confirmarImportacao() {
+    if (!presetsPendentes) return;
+    const lista = presetsPendentes;
+    fecharResumo();
+    try {
+      const r = await Presets.aplicarImportacao(lista);
+      await recarregar();
+      if (r.falhas.length) {
+        mostrarErro(`${r.gravados} importado(s), ${r.falhas.length} falhou(aram): ` +
+          r.falhas.map((f) => `${f.nome} (${f.motivo})`).join("; "));
+      } else {
+        mostrarErro(`${r.gravados} preset(s) importado(s).`);
+      }
+    } catch (e) {
+      mostrarErro("Não deu para importar: " + e.message);
+    }
+  }
+
   // ---------- eventos ----------
 
   elLista.addEventListener("click", (e) => {
@@ -427,6 +519,21 @@
   $("btn-config").addEventListener("click", () => $("config").classList.toggle("aberta"));
   $("toast-desfazer").addEventListener("click", desfazer);
   window.addEventListener("beforeunload", confirmarExclusao);
+
+  $("exportar").addEventListener("click", exportar);
+  $("importar").addEventListener("click", () => $("arquivo-import").click());
+  $("arquivo-import").addEventListener("change", (e) => {
+    const arquivo = e.target.files && e.target.files[0];
+    // Zera o value para que escolher o MESMO arquivo de novo dispare `change`
+    // outra vez -- sem isso, cancelar e reimportar o mesmo arquivo não faz nada.
+    e.target.value = "";
+    if (arquivo) lerArquivoEscolhido(arquivo);
+  });
+  elResumo.addEventListener("click", (e) => {
+    const acao = e.target.dataset && e.target.dataset.acao;
+    if (acao === "confirmar-import") confirmarImportacao();
+    else if (acao === "cancelar-import") fecharResumo();
+  });
 
   // ---------- início ----------
 

@@ -46,8 +46,19 @@
     border-top: 1px solid var(--linha); background: var(--cartao);
     padding: 12px 18px; display: none; gap: 26px;
   }
-  .config.aberta { display: flex; }
+  /* wrap para o resumo da importação poder ocupar a linha inteira embaixo
+     dos três blocos, sem espremer nenhum deles. */
+  .config.aberta { display: flex; flex-wrap: wrap; }
   .config .linha-switch { max-width: 360px; }
+  .acoes-backup { display: flex; gap: 8px; margin-top: 6px; }
+  .resumo-import {
+    flex-basis: 100%; display: none; margin-top: 12px;
+    border: 1px solid var(--linha); border-radius: 8px;
+    background: var(--fundo); padding: 12px 14px; font-size: 12.5px;
+  }
+  .resumo-import.visivel { display: block; }
+  .resumo-import ul { margin: 8px 0 10px 18px; }
+  .resumo-import .acoes { display: flex; gap: 8px; }
 
   /* Só o dashboard tem dois toasts ao mesmo tempo. O de erro sobe para nunca
      cobrir o botão Desfazer, que é o único jeito de recuperar uma exclusão —
@@ -77,6 +88,15 @@
         <div class="dica">O comando só dispara após espaço ou pontuação.</div></div>
       <label class="switch"><input type="checkbox" id="toggle-delimitador" /><span class="trilho"></span></label>
     </div>
+    <div class="bloco-backup">
+      <div style="font-weight:600">Backup dos presets</div>
+      <div class="acoes-backup">
+        <button class="btn" id="exportar">Exportar</button>
+        <button class="btn" id="importar">Importar</button>
+        <input type="file" id="arquivo-import" accept=".json,application/json" hidden />
+      </div>
+    </div>
+    <div class="resumo-import" id="resumo-import"></div>
   </div>
 
   <div class="corpo">
