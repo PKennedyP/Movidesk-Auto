@@ -458,6 +458,45 @@ teste("comando repetido com preset existente entra sem comando", () => {
   assert.strictEqual(r.plano.semComando[0].donoDoComando, "Emissão de nota");
 });
 
+teste("perder o comando pode deixar o preset identico: nao anuncia nem grava", () => {
+  // O preset do arquivo só difere do gravado pelo comando -- e esse comando
+  // é de outro preset, então ele é limpo e o que sobra é igual ao gravado.
+  const atuais = [
+    P.completar({ id: "alvo", nome: "A", comando: "", texto: "t" }),
+    P.completar({ id: "dono", nome: "B", comando: "x", texto: "u" }),
+  ];
+  const r = P.planejarImportacao(envelope([{ id: "alvo", nome: "A", comando: "x", texto: "t" }]), atuais);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.plano.identicos, 1);
+  assert.strictEqual(r.presets.length, 0, "nao ha o que gravar");
+  assert.strictEqual(r.plano.semComando.length, 0, "nao pode prometer mudanca que nao acontece");
+});
+
+teste("perder o comando ainda e anunciado quando o preset muda de fato", () => {
+  const atuais = [
+    P.completar({ id: "alvo", nome: "A", comando: "", texto: "antigo" }),
+    P.completar({ id: "dono", nome: "B", comando: "x", texto: "u" }),
+  ];
+  const r = P.planejarImportacao(envelope([{ id: "alvo", nome: "A", comando: "x", texto: "novo" }]), atuais);
+  assert.strictEqual(r.plano.substituem, 1);
+  assert.strictEqual(r.presets[0].comando, "");
+  assert.strictEqual(r.plano.semComando.length, 1);
+  assert.strictEqual(r.plano.semComando[0].donoDoComando, "B");
+});
+
+teste("preset identico continua dono do seu comando para os seguintes", () => {
+  // O `continue` do caso idêntico não pode fazer o comando parecer livre:
+  // o preset segue gravado com ele.
+  const atuais = [P.completar({ id: "um", nome: "Um", comando: "x", texto: "t" })];
+  const r = P.planejarImportacao(envelope([
+    { id: "um", nome: "Um", comando: "x", texto: "t" },
+    { id: "dois", nome: "Dois", comando: "x", texto: "z" },
+  ]), atuais);
+  assert.strictEqual(r.plano.identicos, 1);
+  assert.strictEqual(r.plano.semComando.length, 1, "o segundo tem que perder o comando");
+  assert.strictEqual(r.plano.semComando[0].nome, "Dois");
+});
+
 teste("comando repetido dentro do arquivo: o segundo perde", () => {
   const r = P.planejarImportacao(envelope([
     { id: "um", nome: "Um", comando: "zz", texto: "a" },

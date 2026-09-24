@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Auto Movidesk – Fechamento de tickets",
-  "version": "2.6.27",
+  "version": "2.6.28",
   "description": "Marca 'Não' e 'Resolvido' automaticamente, expande texto por comando e preenche assunto, serviço, categoria e urgência nos tickets do Movidesk.",
   "permissions": [
     "storage",

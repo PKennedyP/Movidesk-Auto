@@ -283,8 +283,12 @@
       const atual = porId[id];
 
       // O comando do próprio preset (mesmo id) não conflita consigo mesmo.
+      // A perda fica guardada em vez de anunciada na hora: perder o comando
+      // muda o preset, e o teste de identidade logo abaixo precisa rodar
+      // sobre o preset JÁ sem comando.
+      let perdaDeComando = null;
       if (p.comando && donoDoComando[p.comando] && (!atual || atual.comando !== p.comando)) {
-        plano.semComando.push({ nome: p.nome, comando: p.comando, donoDoComando: donoDoComando[p.comando] });
+        perdaDeComando = { nome: p.nome, comando: p.comando, donoDoComando: donoDoComando[p.comando] };
         p.comando = "";
       } else if (p.comando) {
         donoDoComando[p.comando] = p.nome;
@@ -292,8 +296,13 @@
 
       if (atual && mesmoConteudo(atual, p)) {
         plano.identicos++;
+        // Sem anunciar a perda: o preset já está gravado exatamente assim,
+        // nada vai ser escrito. Anunciar "entra sem comando" aqui prometeria
+        // uma mudança que não acontece -- e se for o único item do arquivo, o
+        // botão Importar nasce desabilitado e a promessa fica sem saída.
         continue; // nada a gravar
       }
+      if (perdaDeComando) plano.semComando.push(perdaDeComando);
       if (atual) plano.substituem++;
       else plano.novos++;
       presets.push(p);

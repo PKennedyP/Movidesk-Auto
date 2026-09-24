@@ -353,18 +353,26 @@
     desenharEditor();
   }
 
+  // Devolve uma promise que resolve quando o storage já foi mexido, para quem
+  // vai LER logo em seguida poder esperar -- a importação e a exportação
+  // dependem de o `remove` ter chegado antes do `listar`. Nunca rejeita: o
+  // erro vira toast aqui dentro, senão os call sites que não esperam (o timer
+  // de 6s, o beforeunload) gerariam unhandled rejection.
   function confirmarExclusao() {
-    if (!pendente) return;
+    if (!pendente) return Promise.resolve();
     clearTimeout(pendente.timer);
     const id = pendente.preset.id;
     pendente = null;
     elToast.classList.remove("visivel");
-    Presets.excluir(id).catch((e) => {
+    return Presets.excluir(id).catch((e) => {
       mostrarErro("Não deu para excluir: " + e.message);
       // A exclusão falhou, então o preset continua no storage -- mas já
       // tinha sumido da lista em memória desde o clique em Excluir. Recarrega
       // para a tela voltar a refletir o que está realmente salvo.
-      recarregar().catch((e2) => mostrarErro("Não deu para atualizar a lista: " + e2.message));
+      // `return`: quem esperou por confirmarExclusao() espera o redesenho
+      // também, senão este recarregar() corre em paralelo com a importação
+      // que já retomou e as duas disputam a lista.
+      return recarregar().catch((e2) => mostrarErro("Não deu para atualizar a lista: " + e2.message));
     });
   }
 
@@ -407,11 +415,20 @@
     a.href = url;
     a.download = nome;
     a.click();
-    URL.revokeObjectURL(url);
+    // setTimeout, não revoke direto: revogar no mesmo tick do click() corre
+    // com o início do download. Funciona no tamanho de hoje e falha em
+    // silêncio quando não funcionar -- o toast de sucesso aparece do mesmo
+    // jeito. Um tick a mais é mais barato que descobrir isso num backup.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   async function exportar() {
     try {
+      // Fecha a exclusão pendente ANTES de ler, como a importação faz: o
+      // preset excluído há menos de 6s ainda está no storage, e sem isso o
+      // backup carregaria um preset que já sumiu da tela -- e o reimportaria
+      // depois como se fosse perda de dado recuperada.
+      await confirmarExclusao();
       const lista = await Presets.listar();
       if (!lista.length) { mostrarErro("Nenhum preset para exportar."); return; }
       const env = Presets.montarExportacao(lista);
@@ -461,7 +478,7 @@
 
   function lerArquivoEscolhido(arquivo) {
     const leitor = new FileReader();
-    leitor.onerror = () => mostrarErro("Não consegui ler o arquivo.");
+    leitor.onerror = () => { fecharResumo(); mostrarErro("Não consegui ler o arquivo."); };
     leitor.onload = async () => {
       try {
         // Fecha a exclusão pendente ANTES de ler: senão o preset que o usuário
@@ -469,12 +486,16 @@
         // como "idêntico", o botão Importar nasce desabilitado, e o timer o
         // apaga logo depois. É justamente o caso de recuperar uma exclusão por
         // engano importando o backup.
-        confirmarExclusao();
+        await confirmarExclusao();
         const atuais = await Presets.listar();
         const r = Presets.planejarImportacao(String(leitor.result), atuais);
         if (!r.ok) { fecharResumo(); mostrarErro(r.motivo); return; }
         mostrarResumo(r.plano, r.presets, String(leitor.result));
       } catch (e) {
+        // Fecha junto com o erro, igual ao ramo `!r.ok`: sem isso o resumo do
+        // arquivo ANTERIOR fica na tela com o textoPendente dele armado, e o
+        // Importar grava aquele arquivo enquanto a mensagem fala deste.
+        fecharResumo();
         mostrarErro("Não deu para preparar a importação: " + e.message);
       }
     };
@@ -489,7 +510,7 @@
       // Fecha qualquer exclusão pendente ANTES de reler: senão o preset que o
       // usuário acabou de excluir ainda aparece no storage, é classificado como
       // "idêntico", não é gravado, e o timer o apaga logo depois.
-      confirmarExclusao();
+      await confirmarExclusao();
       // Replaneja contra o storage de agora. O resumo pode ter ficado minutos
       // na tela; aplicar a lista congelada gravaria decisões tomadas sobre um
       // retrato velho.
@@ -539,7 +560,12 @@
   });
   $("btn-config").addEventListener("click", () => $("config").classList.toggle("aberta"));
   $("toast-desfazer").addEventListener("click", desfazer);
-  window.addEventListener("beforeunload", confirmarExclusao);
+  // Arrow que DESCARTA o retorno, não `confirmarExclusao` direto: desde que
+  // ela devolve promise, passá-la como handler faz o beforeunload tratar o
+  // retorno como returnValue e o Chrome abrir "Sair do site?" em toda saída
+  // do dashboard -- inclusive sem exclusão pendente, porque Promise.resolve()
+  // também não é null.
+  window.addEventListener("beforeunload", () => { confirmarExclusao(); });
 
   $("exportar").addEventListener("click", exportar);
   $("importar").addEventListener("click", () => $("arquivo-import").click());

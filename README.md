@@ -112,6 +112,6 @@ o par sistema + serviço, e não só o serviço.
 node presets.test.js
 ```
 
-32 casos, sem dependência nenhuma — monta um `chrome.storage.sync` falso em
+53 casos, sem dependência nenhuma — monta um `chrome.storage.sync` falso em
 memória. As telas não têm teste automatizado; mudança de UI se verifica no
 Chrome.
